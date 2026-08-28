@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+release/
+.env
+.env.local
+*.log
+npm-debug.log*
+.DS_Store
+coverage/
+apps/server/prisma/dev.db
+apps/desktop/out/
+.vscode/
+*.tsbuildinfo

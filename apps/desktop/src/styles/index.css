@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full;
+}
+
+/*
+ * Print isolation: when printing (from the POS receipt "Print" button),
+ * hide the entire application chrome (sidebar, top bar, modals backdrop,
+ * etc.) and show only the element marked .print-receipt. Without this, the
+ * browser/Electron print dialog would render whatever is currently on
+ * screen — the full POS layout — instead of a clean, cashier-friendly
+ * receipt suitable for a thermal or A4 printer.
+ */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-receipt,
+  .print-receipt * {
+    visibility: visible;
+  }
+  .print-receipt {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
