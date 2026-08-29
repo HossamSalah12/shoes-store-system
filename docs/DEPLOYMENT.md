@@ -22,10 +22,18 @@ expiry, and never asks for a credit card**:
   expiry, no card required. (Its free compute auto-suspends after a few
   minutes of inactivity and wakes back up automatically on the next query —
   a few seconds' delay, not a problem for testing.)
-- **App server**: [Render.com](https://render.com) — free Web Service, no
-  card required. Supports long-running Node processes, which is what
-  Socket.IO's persistent WebSocket connections need (unlike pure serverless
-  platforms, which would break realtime sync).
+- **App server**: [Bonto.dev](https://bonto.dev) — free Node.js hosting,
+  no card required, supports WebSockets natively (needed for Socket.IO's
+  persistent realtime connections — platforms that only run Node as
+  serverless functions, like Vercel or Netlify, cannot host this backend).
+
+> Render.com was the original recommendation here, but Render now prompts
+> for a credit card during Web Service creation even when selecting the
+> free instance type. Bonto.dev is the replacement: verified free, no
+> card, WebSocket-capable, at the time of writing. Hosting platforms change
+> their policies without much notice — if Bonto ever adds a card
+> requirement too, search for "free Node.js hosting no credit card
+> websocket" and re-verify before signing up anywhere.
 
 ### Step 1 — Create the free database on Neon
 1. Sign up at [neon.tech](https://neon.tech) (email only, no card).
@@ -37,71 +45,68 @@ expiry, and never asks for a credit card**:
    includes `sslmode=require`, which Neon requires).
 
 ### Step 2 — Push the project to GitHub
-Render deploys from a Git repository. Create a repo (public or private) and
-push this project to it if you haven't already.
+Bonto supports Git push-to-deploy from a GitHub repository. Create a repo
+(public or private) and push this project to it if you haven't already.
 
-### Step 3 — Create the free Web Service on Render
-Sign up at [render.com](https://render.com) (email only, no card) →
-**New → Web Service** → connect your repo. Configure:
-- **Root Directory**: leave blank (repo root)
-- **Build Command**:
-  ```
-  npm install && npm run build --workspace=packages/shared && npm run build --workspace=packages/validation && npm run build --workspace=apps/server && npx prisma generate --schema=apps/server/prisma/schema.prisma
-  ```
-- **Start Command**:
-  ```
-  node apps/server/dist/index.js
-  ```
-- **Plan**: Free
+### Step 3 — Create the app on Bonto and connect the repo
+1. Sign up at [bonto.dev](https://bonto.dev) (email only, no card).
+2. Create a new app and connect it to your GitHub repository (or set the
+   repo as a Git remote and push directly — see Bonto's docs for whichever
+   flow is currently offered in its dashboard).
+3. Bonto auto-detects Node.js via the root `package.json` and runs
+   `npm install` followed by the `start` script. This repo's root
+   `package.json` already defines a single self-contained `start` script
+   for exactly this style of platform:
+   ```json
+   "start": "npm run build --workspace=packages/shared && npm run build --workspace=packages/validation && npm run build --workspace=apps/server && npx prisma generate --schema=apps/server/prisma/schema.prisma && npx prisma migrate deploy --schema=apps/server/prisma/schema.prisma && npm run prisma:seed --workspace=apps/server && node apps/server/dist/index.js"
+   ```
+   It builds every workspace package, generates the Prisma client, applies
+   pending migrations, runs the (idempotent — safe to repeat) seed script,
+   then starts the server — all from one command, no separate build-step
+   configuration needed. You do not need to change anything here; it's
+   already wired up.
+4. Confirm your app is set to listen on `process.env.PORT` — it already
+   does (`apps/server/src/config/env.ts` reads `PORT` from the
+   environment with no hardcoded value required).
 
 ### Step 4 — Environment variables
-In the Web Service's **Environment** tab, add:
+In the app's environment variables settings, add:
 - `DATABASE_URL` → the Neon connection string from Step 1
-- `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` → generate real random values (e.g. `openssl rand -base64 48`, run twice for two different values)
+- `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` → two different strong random values
 - `NODE_ENV=production`
 - `CORS_ALLOWED_ORIGINS` → `http://localhost:5173` (your local Electron dev renderer, so your desktop app on your own machine is allowed to call this remote server)
 - `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD`
-- `PORT` → Render sets this automatically; already read via `process.env.PORT` in `env.ts`, no action needed
+- `SEED_DEMO_DATA=true` if you also want the Hussein/Mohamed demo tenants created automatically on first start
 
-### Step 5 — Run migrations and seed once
-After the first successful deploy, open the Web Service's **Shell** tab in the Render dashboard and run:
-```
-cd apps/server
-npx prisma migrate deploy
-npm run prisma:seed
-```
-
-### Step 6 — Point the desktop app at it
+### Step 5 — Point the desktop app at it
 In `apps/desktop/.env`:
 ```
-VITE_API_BASE_URL=https://your-service-name.onrender.com
+VITE_API_BASE_URL=https://your-app-name.bonto.run
 ```
-Restart `npm run dev:desktop`. No Electron/CSP changes are needed — the
-CSP in `electron/main.ts` already allows `https:`/`wss:` connections in
-both dev and production; it was only ever restrictive about *plain http*
-localhost origins.
+(replace with whatever subdomain Bonto actually assigns your app). Restart
+`npm run dev:desktop`. No Electron/CSP changes are needed — the CSP in
+`electron/main.ts` already allows `https:`/`wss:` connections in both dev
+and production; it was only ever restrictive about *plain http* localhost
+origins.
 
 ### What "free" actually costs you here (read this so nothing surprises you)
-- **Render free Web Service spins down after ~15 minutes of inactivity**
-  and takes 30–60 seconds to wake back up on the next request. The desktop
-  app's API client has a 20-second timeout
-  (`apps/desktop/src/api/client.ts`) — the very first request after idle
-  may time out; just retry it once. This is expected free-tier behavior,
-  not a bug.
+- **Bonto's free tier includes 75 runtime hours per month** and auto-sleeps
+  the app after ~30 minutes of inactivity, waking automatically on the next
+  request. 75 hours/month is roughly 2.5 hours/day on average — plenty for
+  periodic testing sessions, not enough for permanently-on production
+  traffic. There's no card and no forced deletion; you simply stop being
+  served once the monthly hour allowance runs out, and it resets next month.
 - **Neon's free compute auto-suspends** similarly after a few idle minutes,
-  with a much shorter wake-up (typically 1–2 seconds) — usually
-  imperceptible.
+  with a short wake-up (typically 1–2 seconds) — usually imperceptible.
 - Neither of these ever expires, deletes your data, or asks for payment
-  details. They are simply "pause when idle, resume on demand" — the
-  standard shape of a genuinely free tier, not a countdown to a paywall.
+  details.
 
 ### Alternative: Render's own free PostgreSQL (simpler, but time-limited)
-If you'd rather keep everything in one dashboard and don't mind a hard
-cutoff, Render also offers its own free PostgreSQL (**New → PostgreSQL** →
-free plan) — copy its Internal/External Database URL as `DATABASE_URL`
-instead of Neon's. The tradeoff: **Render deletes free databases after 90
-days**. Fine for a short test; Neon is the better choice if this testing
-phase might run longer or you don't want a deadline to think about.
+If you end up using Render anyway for some other reason and don't mind a
+hard cutoff, Render also offers its own free PostgreSQL (**New →
+PostgreSQL** → free plan) — copy its Internal/External Database URL as
+`DATABASE_URL` instead of Neon's. The tradeoff: **Render deletes free
+databases after 90 days**. Neon has no such deadline.
 
 ## 1. Backend deployment (production)
 

@@ -13,6 +13,7 @@
     "build": "npm run build --workspaces --if-present",
     "build:server": "npm run build --workspace=apps/server",
     "build:desktop": "npm run build --workspace=apps/desktop",
+    "start": "npm run build --workspace=packages/shared && npm run build --workspace=packages/validation && npm run build --workspace=apps/server && npx prisma generate --schema=apps/server/prisma/schema.prisma && npx prisma migrate deploy --schema=apps/server/prisma/schema.prisma && npm run prisma:seed --workspace=apps/server && node apps/server/dist/index.js",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
